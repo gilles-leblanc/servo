@@ -9,7 +9,6 @@
 
 from __future__ import print_function, unicode_literals
 
-import os
 import os.path as path
 import subprocess
 import sys
@@ -25,8 +24,14 @@ from mach.decorators import (
 from servo.command_base import CommandBase, cd
 
 
-def is_headless_build():
-    return int(os.getenv('SERVO_HEADLESS', 0)) == 1
+def headless_supported():
+    supported = sys.platform.startswith("linux")
+
+    if not supported:
+        print("Headless mode (OSMesa) is not supported on your platform.")
+        print("Building without headless mode.")
+
+    return supported
 
 
 def notify_linux(title, text):
@@ -134,6 +139,10 @@ class MachCommands(CommandBase):
     @CommandArgument('--dev', '-d',
                      action='store_true',
                      help='Build in development mode')
+    @CommandArgument('--headless',
+                     default=None,
+                     action='store_true',
+                     help='Enable headless mode (OSMesa)')
     @CommandArgument('--jobs', '-j',
                      default=None,
                      help='Number of jobs to run in parallel')
@@ -151,7 +160,7 @@ class MachCommands(CommandBase):
     @CommandArgument('params', nargs='...',
                      help="Command-line arguments to be passed through to Cargo")
     def build(self, target=None, release=False, dev=False, jobs=None,
-              android=None, verbose=False, debug_mozjs=False, params=None):
+              headless=False, android=None, verbose=False, debug_mozjs=False, params=None):
         if android is None:
             android = self.config["build"]["android"]
 
@@ -206,7 +215,7 @@ class MachCommands(CommandBase):
         if debug_mozjs or self.config["build"]["debug-mozjs"]:
             features += ["script/debugmozjs"]
 
-        if is_headless_build():
+        if headless and headless_supported():
             opts += ["--no-default-features"]
             features += ["headless"]
 
@@ -324,15 +333,19 @@ class MachCommands(CommandBase):
     @Command('build-tests',
              description='Build the Servo test suites',
              category='build')
+    @CommandArgument('--headless',
+                     default=None,
+                     action='store_true',
+                     help='Enable headless mode (OSMesa)')
     @CommandArgument('--jobs', '-j',
                      default=None,
                      help='Number of jobs to run in parallel')
     @CommandArgument('--release', default=False, action="store_true",
                      help="Build tests with release mode")
-    def build_tests(self, jobs=None, verbose=False, release=False):
+    def build_tests(self, headless=False, jobs=None, verbose=False, release=False):
         self.ensure_bootstrapped()
         args = ["cargo", "test", "--no-run"]
-        if is_headless_build():
+        if headless and headless_supported():
             args += ["--no-default-features", "--features", "headless"]
         if release:
             args += ["--release"]
